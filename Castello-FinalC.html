@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Castello-ENST 8068 Final-Map C: FY21-22 ILL Transaction Item Types</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1" />
+    <script src="https://api.mapbox.com/mapbox-gl-js/v1.8.1/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v1.8.1/mapbox-gl.css" rel="stylesheet" />
+    <script src='https://api.mapbox.com/mapbox.js/plugins/turf/v3.0.11/turf.min.js'></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+        }
+        .map-overlay {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            background: #fff;
+            margin-right: 20px;
+            font-family: Arial, sans-serif;
+            font-size: small;
+            overflow: auto;
+            width: fit-content;
+            height: fit-content;
+            border-radius: 3px;
+        }
+        #title {
+            top: 0;
+            height: auto;
+            max-height: 33vh;
+            overflow-y: auto;
+            margin-top: 20px;
+            padding-left: 20px;
+            padding-right: 20px;
+            /* width: 250px; */
+        }
+
+        .mapboxgl-ctrl {
+            box-shadow: none;
+            /* background-color: transparent; */
+        }
+        .mapboxgl-ctrl-group.mapboxgl-ctrl-bottom-right {
+            right: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+    <div class='map-overlay' id='title'><h2>Map C: FY21-22 InterLibrary Loan: Transactions by Item Type</h2>
+        <p><strong>This is, in part, dummy data.</strong> 
+            <a href="./MethodologicalNotes.html" target="new">See the methodological notes</a> 
+            for full details.
+        </p>
+        <p>This map visualizes Temple Libraries InterLibrary Loan transactions for fiscal year 2021-2022 by item type.</p>
+        <div id='activity'><p>
+            <ol>
+                <li><strong>Zoom in</strong> to see partner library locations differentiated by total transaction volume</li>
+                <li><strong>Click on a library</strong> to show its activity with Temple Libraries by item type</li>
+                <li><strong>Select an item type</strong> from the dropdown menu to visualize that type of activity on the map</li>
+            </ol>
+        </p></div>
+        <strong><span id="libname"></span></strong>
+        <span id="libcode"></span>
+        <span id="libcity"></span>
+        <span id="libcountry"></span>
+        <br/><span id="libact"></span>
+        <br/>&nbsp;&nbsp;&nbsp;<span id="libarticles"></span>
+        <br/>&nbsp;&nbsp;&nbsp;<span id="libbooks"></span>
+        <br/>&nbsp;&nbsp;&nbsp;<span id="libbookchapters"></span>
+        <div class='map-selector'>
+            <p></p>
+            <label for='layer-selector'>Select an item type to map:</label>
+            <select id='layer-selector'>
+                <option value=''></option>
+                <option value='articles'>Articles</option>
+                <option value='books'>Books</option>
+                <option value='bookchapters'>Book Chapters</option>
+                <option value='libraries-circle'>All items</option>
+            </select>
+        </div>
+    </div>
+    
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1Ijoib2Nhc3RlbGxvIiwiYSI6ImNrdmg2ZW1ybTF5a3EydnFpNGZ5bTVjcDQifQ.8A9RLtH42G7Ou_nQnuxatA';
+
+        var map = new mapboxgl.Map({ 
+            container: 'map', 
+            // style: 'mapbox://styles/mapbox/streets-v11',
+            // use a custom style based on Mapbox Streets in order to add new icons
+            style: 'mapbox://styles/ocastello/clh280sis014a01pi7jbrgb4k',
+            center: [0, 20, ], 
+            zoom: 1.6
+        });
+    
+        map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
+        var layerIDs = ['libraries-symbol', 'libraries-circle', 'articles','books','bookchapters'];
+
+        // Target the span elements used in the map overlay box
+        const codeDisplay = document.getElementById('libcode');
+        const nameDisplay = document.getElementById('libname');
+        const cityDisplay = document.getElementById('libcity');
+        const countryDisplay = document.getElementById('libcountry');
+        const actDisplay = document.getElementById('libact');
+        const articlesDisplay = document.getElementById('libarticles');
+        const booksDisplay = document.getElementById('libbooks');
+        const bookChaptersDisplay = document.getElementById('libbookchapters');
+
+        // Define the various layers and their styles
+        var symbolLayer = {
+            id: 'libraries-symbol',
+            type: 'symbol',
+            'source': 'libraries',
+            // 'source-layer': 'all-activity',
+            'source-layer': 'item-types',
+            layout: {
+                'icon-image': 'library-wht',
+                'icon-allow-overlap': true
+            }
+        };
+
+        var circleLayer = {
+            id: 'libraries-circle',
+            type: 'circle',
+            'source': 'libraries',
+            'source-layer': 'item-types',
+            paint: {
+                'circle-radius': {
+                    property: 'Total_FY21_Activity',
+                    stops: [
+                        [0, 5],
+                        [10, 10],
+                        [20, 15],
+                        [30, 20]
+                    ]
+                },
+                'circle-color': {
+                    property: 'Total_FY21_Activity',
+                    stops: [
+                        [0, 'Thistle'],
+                        [10, 'Violet'],
+                        [20, 'Magenta'],
+                        [30, 'DarkMagenta']
+                    ]
+                },
+                'circle-stroke-color': 'Purple',
+                'circle-stroke-width': 1,
+            }
+        };
+
+        var articlesLayer = {
+                id: 'articles',
+                type: 'circle',
+                'source': 'libraries',
+                'source-layer': 'item-types',
+                paint: {
+                    'circle-radius': {
+                        property: 'Total_FY21_Articles',
+                        stops: [
+                            [0, 5],
+                            [10, 10],
+                            [20, 15],
+                            [30, 20]
+                        ]
+                    },
+                    'circle-color': {
+                        property: 'Total_FY21_Articles',
+                        stops: [
+                            [0, 'PaleTurquoise'],
+                            [10, 'MediumTurquoise'],
+                            [20, 'LightSeaGreen'],
+                            [30, 'Teal']
+                        ]
+                    },
+                'circle-stroke-color': 'DarkCyan',
+                'circle-stroke-width': 1,
+                }
+            }
+
+            var booksLayer = {
+                id: 'books',
+                type: 'circle',
+                'source': 'libraries',
+                'source-layer': 'item-types',
+                paint: {
+                    'circle-radius': {
+                        property: 'Total_FY21_Books',
+                        stops: [
+                            [0, 5],
+                            [10, 10],
+                            [20, 15],
+                            [30, 20]
+                        ]
+                    },
+                    'circle-color': {
+                        property: 'Total_FY21_Books',
+                        stops: [
+                            [0, 'Pink'],
+                            [10, 'HotPink'],
+                            [20, 'MediumVioletRed'],
+                            [30, 'DarkRed']
+                        ]
+                    },
+                'circle-stroke-color': 'Red',
+                'circle-stroke-width': 1,
+                }
+            }
+
+            var bookChapterLayer = {
+                id: 'bookchapters',
+                type: 'circle',
+                'source': 'libraries',
+                'source-layer': 'item-types',
+                paint: {
+                    'circle-radius': {
+                        property: 'Total_FY21_BookChapters',
+                        stops: [
+                            [0, 5],
+                            [10, 10],
+                            [20, 15],
+                            [30, 20]
+                        ]
+                    },
+                    'circle-color': {
+                        property: 'Total_FY21_BookChapters',
+                        stops: [
+                            [0, 'LightSalmon'],
+                            [10, 'Orange'],
+                            [20, 'OrangeRed'],
+                            [30, 'Brown']
+                        ]
+                    },
+                'circle-stroke-color': 'Maroon',
+                'circle-stroke-width': 1,
+                }
+            }
+
+        map.on('load', function() {
+                
+            map.addSource('libraries', {
+                type: 'vector', // use vector tile layer from geojson data in Mapbox Studio
+                url: 'mapbox://ocastello.item-types',
+                // alternate code for using geojson file in home directory 
+                // type: 'geojson',
+                // data: './AllPartnerActivity.geojson',
+                // 'generateId': true 
+            });
+
+            map.addLayer(circleLayer); // for zoomed-in views
+            map.addLayer(symbolLayer); // for zoomed-out views
+            map.addLayer(articlesLayer);
+            map.addLayer(booksLayer);
+            map.addLayer(bookChapterLayer);
+
+            // set initial visibilities
+            map.setLayoutProperty('libraries-circle', 'visibility', 'none');
+            map.setLayoutProperty('articles', 'visibility', 'none');
+            map.setLayoutProperty('books', 'visibility', 'none');
+            map.setLayoutProperty('bookchapters', 'visibility', 'none');
+
+            var layerSelector = document.getElementById('layer-selector');
+            layerSelector.addEventListener('change', function(e) {
+                var selectedLayerId = e.target.value;
+                console.log("Selected layer: "+selectedLayerId)
+                layerIDs.forEach(function(layerId) {
+                    if (layerId !== selectedLayerId) {
+                        console.log("This layer: "+layerId)
+                        map.setLayoutProperty(layerId, 'visibility', 'none');
+                    } else {
+                        map.setLayoutProperty(layerId, 'visibility', 'visible');
+                    }
+                });
+            });
+
+            // Update the marker's style, from symbol to data-driven circle marker, based on zoom level
+            map.on('zoom', function() {
+                if (map.getZoom() < 2.5) {
+                    map.setLayoutProperty('libraries-symbol', 'visibility', 'visible');
+                    map.setLayoutProperty('libraries-circle', 'visibility', 'none');
+                } else {
+                    map.setLayoutProperty('libraries-symbol', 'visibility', 'none');
+                    map.setLayoutProperty('libraries-circle', 'visibility', 'visible');
+                }
+            });
+
+            let libID = null;
+
+            // clear text if clicking on the background map
+            // show ILL data if clicking on a point feature
+            map.on('click', function (e) {
+                var features = map.queryRenderedFeatures(e.point);
+                if (features.length) {
+                    var clickedLayer = features[0].layer.id;
+                    console.log('Clicked on layer:', clickedLayer);
+                    if (layerIDs.includes(clickedLayer)) {
+
+                        const libCode = features[0].properties.Partner_Library;
+                        const libName = features[0].properties.Library;
+                        const libCity = features[0].properties.City;
+                        const libCountry = features[0].properties.Country;
+                        const libActivity = features[0].properties.Total_FY21_Activity;
+                        const libArticles = features[0].properties.Total_FY21_Articles;
+                        const libBooks = features[0].properties.Total_FY21_Books;
+                        const libBookChapters = features[0].properties.Total_FY21_BookChapters;
+
+                        codeDisplay.textContent = "("+libCode+")";
+                        nameDisplay.textContent = libName;
+                        cityDisplay.textContent = libCity+", ";
+                        countryDisplay.textContent = libCountry;
+                        actDisplay.textContent = libActivity + " ILL transaction" + [libActivity > 1 ? "s" : ""]+":"
+                        articlesDisplay.textContent = libArticles + " article" + [libArticles === 1 ? "" : "s"]
+                        booksDisplay.textContent = libBooks + " book" + [libBooks === 1 ? "" : "s"]
+                        bookChaptersDisplay.textContent = libBookChapters + " book chapter" + [libBookChapters === 1 ? "" : "s"]
+                        if (libID) {
+                            map.removeFeatureState({
+                                source: 'libraries',
+                                sourceLayer: 'item-types',
+                                id: libID
+                            });
+                        }
+
+                        libID = features[0].id;
+
+                        map.setFeatureState(
+                            {
+                                source: 'libraries',
+                                sourceLayer: 'item-types',
+                                id: libID
+                            },
+                            {
+                                click: true
+                            }
+                        );  
+
+                    } else {
+                        // When the user clicks elsewhere, update the
+                        // feature state of the previously clicked feature
+                        // and clear the map overlay information
+                        codeDisplay.textContent = "";
+                        nameDisplay.textContent = "";
+                        cityDisplay.textContent = "";
+                        countryDisplay.textContent = "";
+                        actDisplay.textContent = "";
+                        articlesDisplay.textContent = "";
+                        booksDisplay.textContent = "";
+                        bookChaptersDisplay.textContent = "";
+
+                         
+                        if (libID) {
+                            map.setFeatureState(
+                                {
+                                    source: 'libraries',
+                                    sourceLayer: 'item-types',
+                                    id: libID
+                                },
+                                {
+                                    click: false
+                                }
+                            );
+                        }
+                        libID = null;
+                    }
+                }
+
+            });  
+
+        });
+
+    </script>
+
+</body>
+</html>

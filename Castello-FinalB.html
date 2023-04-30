@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Castello-ENST 8068 Final-Map B: FY21-22 ILL Borrowing and Lending Volume</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1" />
+    <script src="https://api.mapbox.com/mapbox-gl-js/v1.8.1/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v1.8.1/mapbox-gl.css" rel="stylesheet" />
+    <script src='https://api.mapbox.com/mapbox.js/plugins/turf/v3.0.11/turf.min.js'></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+        }
+        .map-overlay {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            background: #fff;
+            margin-right: 20px;
+            font-family: Arial, sans-serif;
+            font-size: small;
+            overflow: auto;
+            width: fit-content;
+            height: fit-content;
+            border-radius: 3px;
+        }
+        #title {
+            top: 0;
+            height: auto;
+            max-height: 28vh;
+            overflow-y: auto;
+            margin-top: 20px;
+            padding-left: 20px;
+            padding-right: 20px;
+            /* width: 250px; */
+        }
+
+        .mapboxgl-ctrl {
+            box-shadow: none;
+            /* background-color: transparent; */
+        }
+        .mapboxgl-ctrl-group.mapboxgl-ctrl-bottom-right {
+            right: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+    <div class='map-overlay' id='title'><h2>Map B: FY21-22 InterLibrary Loan: Borrowing vs. Lending</h2>
+        <p><strong>This is, in part, dummy data.</strong> 
+            <a href="./MethodologicalNotes.html" target="new">See the methodological notes</a> 
+            for full details.
+        </p>
+        <p>This map visualizes Temple Libraries InterLibrary Loan transactions for fiscal year 2021-2022.</p>
+        <div id='activity'><p>
+            <ol>
+                <li><strong>Zoom in</strong> to see partner library locations differentiated by total transaction volume</li>
+                <li><strong>Hover over a library</strong> to show its borrowing vs. lending activity with Temple Libraries</li>
+                <li><strong>Click on a library</strong> to visualize its activity as directional connections with Philadelphia</li>
+            </ol>
+        </p></div>
+        <strong><span id="libname"></span></strong>
+        <span id="libcode"></span>
+        <span id="libcity"></span>
+        <span id="libcountry"></span>
+        <br/><span id="libact"></span>
+        <br/>&nbsp;&nbsp;&nbsp;<span id="libborrow"></span>
+        <br/>&nbsp;&nbsp;&nbsp;<span id="liblend"></span>
+    </div>
+    
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1Ijoib2Nhc3RlbGxvIiwiYSI6ImNrdmg2ZW1ybTF5a3EydnFpNGZ5bTVjcDQifQ.8A9RLtH42G7Ou_nQnuxatA';
+
+        var map = new mapboxgl.Map({ 
+            container: 'map', 
+            // style: 'mapbox://styles/mapbox/streets-v11', 
+            // use a custom style based on Mapbox Streets in order to add new icons
+            style: 'mapbox://styles/ocastello/clh280sis014a01pi7jbrgb4k',
+            center: [0, 20, ], 
+            zoom: 1.6
+        });
+    
+        map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
+
+        // Target the span elements used in the map overlay box
+        const codeDisplay = document.getElementById('libcode');
+        const nameDisplay = document.getElementById('libname');
+        const cityDisplay = document.getElementById('libcity');
+        const countryDisplay = document.getElementById('libcountry');
+        const actDisplay = document.getElementById('libact');
+        const borrowDisplay = document.getElementById('libborrow');     
+        const lendDisplay = document.getElementById('liblend');
+        
+        var lineSource = null; // global variable to store the line source
+
+        // Define the symbol and circle marker styles
+        var symbolLayer = {
+            id: 'libraries-symbol',
+            type: 'symbol',
+            'source': 'libraries',
+            'source-layer': 'borrowing-lending',
+            layout: {
+                'icon-image': 'library-wht',
+                'icon-allow-overlap': true
+            }
+        };
+
+        var circleLayer = {
+            id: 'libraries-circle',
+            type: 'circle',
+            'source': 'libraries',
+            'source-layer': 'borrowing-lending',
+            paint: {
+                'circle-radius': {
+                property: 'Total_FY21_Activity',
+                stops: [
+                    [0, 5],
+                    [10, 10],
+                    [20, 15],
+                    [30, 20]
+                ]
+                },
+                'circle-color': {
+                property: 'Total_FY21_Activity',
+                stops: [
+                    [0, 'Thistle'],
+                    [10, 'Violet'],
+                    [20, 'Magenta'],
+                    [30, 'DarkMagenta']
+                ]
+                },
+                'circle-stroke-color': 'Purple',
+                'circle-stroke-width': 1,
+            }
+        };
+
+        map.on('load', function() {
+                
+            map.addSource('libraries', {
+                type: 'vector', // use vector tile layer from geojson data in Mapbox Studio
+                url: 'mapbox://ocastello.borrowing-lending',
+                // alternate code for using geojson file in home directory 
+                // type: 'geojson',
+                // data: './BorrowingLending.geojson',
+                // 'generateId': true 
+            });
+
+            map.addLayer(circleLayer); // for zoomed-in views
+            map.addLayer(symbolLayer); // for zoomed-out views
+            map.setLayoutProperty('libraries-circle', 'visibility', 'none');
+
+            // Update the marker's style, from symbol to data-driven circle marker, based on zoom level
+            map.on('zoom', function() {
+            if (map.getZoom() < 2.5) {
+                map.setLayoutProperty('libraries-symbol', 'visibility', 'visible');
+                map.setLayoutProperty('libraries-circle', 'visibility', 'none');
+            } else {
+                map.setLayoutProperty('libraries-symbol', 'visibility', 'none');
+                map.setLayoutProperty('libraries-circle', 'visibility', 'visible');
+            }
+            });
+
+            let libID = null;
+
+            // on hover, show contextual info in the map overlay
+            map.on('mousemove', 'libraries-circle', function(e) { 
+
+                map.getCanvas().style.cursor = 'pointer';
+                // Set constants equal to the current library info
+                const libCode = e.features[0].properties.Partner_Library;
+                const libName = e.features[0].properties.Library;
+                const libCity = e.features[0].properties.City;
+                const libCountry = e.features[0].properties.Country;
+                const libActivity = e.features[0].properties.Total_FY21_Activity;
+                const libBorrowingFromUs = e.features[0].properties.Total_FY21_BorrowingFromUs;
+                const libLendingToUs = e.features[0].properties.Total_FY21_LendingToUs;
+
+                // Check whether features exist
+                if (e.features.length === 0) return;
+
+                // Display the information in the overlay box
+                codeDisplay.textContent = "("+libCode+")";
+                nameDisplay.textContent = libName;
+                cityDisplay.textContent = libCity+", ";
+                countryDisplay.textContent = libCountry;
+                actDisplay.textContent = libActivity + " ILL transaction" + [libActivity > 1 ? "s" : ""]+":"
+                borrowDisplay.textContent = libBorrowingFromUs + " item" + [libBorrowingFromUs === 1 ? "" : "s"] + " borrowed from us";
+                lendDisplay.textContent = libLendingToUs + " item" + [libLendingToUs === 1 ? "" : "s"] + " lent to us";
+
+                // If libID for the hovered feature is not null,
+                // reset to the default behavior
+                if (libID) {
+                    map.removeFeatureState({
+                        source: 'libraries',
+                        sourceLayer: 'borrowing-lending',
+                        id: libID
+                    });
+                }
+
+                libID = e.features[0].id;
+
+                map.setFeatureState(
+                    {
+                        source: 'libraries',
+                        sourceLayer: 'borrowing-lending',
+                        id: libID
+                    },
+                    {
+                        hover: true
+                    }
+                );    
+            });
+
+            // When the mouse leaves the layer, update the
+            // feature state of the previously hovered feature
+            map.on('mouseleave', 'libraries-circle', () => {
+                if (libID) {
+                    map.setFeatureState(
+                        {
+                            source: 'libraries',
+                            sourceLayer: 'borrowing-lending',
+                            id: libID
+                        },
+                        {
+                            hover: false
+                        }
+                    );
+                }
+                libID = null;
+
+                // Reset the cursor style
+                map.getCanvas().style.cursor = '';
+            });
+
+            map.on('click', 'libraries-circle', function (e) {
+                var coordinates = e.features[0].geometry.coordinates.slice();
+                var destination = [-75.1652, 39.9526];
+
+                if (lineSource !== null) {
+                    // remove the existing line layer and source
+                    map.removeLayer('lend-line-viz');
+                    map.removeLayer('borrow-line-viz');
+                    map.removeSource('connect-line');
+                }
+                // create a new GeoJSON object with the clicked point and the destination point
+                var AB_geojson = {
+                    type: 'FeatureCollection',
+                    features: [
+                        {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Point',
+                            coordinates: coordinates
+                        }
+                        },
+                        {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Point',
+                            coordinates: destination
+                        }
+                        },
+                        {
+                        type: 'Feature',
+                        'properties': {
+                            'activity_vol': e.features[0].properties.Total_FY21_Activity/2,
+                            'borrowFromUs_vol': e.features[0].properties.Total_FY21_BorrowingFromUs,
+                            'lendToUs_vol': e.features[0].properties.Total_FY21_LendingToUs,
+                        }, 
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: [coordinates, destination]
+                        }
+                        }
+                    ],
+                };
+
+                // add the GeoJSON object as a new source on the map
+                map.addSource('connect-line', {
+                type: 'geojson',
+                    data: AB_geojson
+                });
+
+                // add a new layer to display the Lending to Us line
+                map.addLayer({
+                    id: 'lend-line-viz',
+                    type: 'line',
+                    source: 'connect-line',
+                    layout: {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                    },
+                    paint: {
+                        'line-width': {
+                            property: 'lendToUs_vol',
+                            stops: [
+                                [0, 0],
+                                [1, 5],
+                                [5, 10],
+                                [10, 15],
+                                [20, 20],
+                                [30, 25]
+                            ]
+                        },
+                        "line-pattern": "rghtarrow",
+                        "line-translate": [5,-10],
+                    }
+                });
+
+                // add a new layer to display the Borrowing from Us line
+                map.addLayer({
+                    id: 'borrow-line-viz',
+                    type: 'line',
+                    source: 'connect-line',
+                    layout: {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                    },
+                    paint: {
+                        'line-width': {
+                            property: 'borrowFromUs_vol',
+                            stops: [
+                                [0, 0],
+                                [1, 5],
+                                [5, 10],
+                                [10, 15],
+                                [20, 20],
+                                [30, 25]
+                            ]
+                        },
+                        "line-pattern": "lftarrow",
+                        "line-translate": [-5,10],
+                    }
+                });
+                // store the new line source for later use
+                lineSource = map.getSource('connect-line');
+            });
+
+            // clear the existing line layer and source, and the map overlay box 
+            // when the map is clicked but not on a point feature
+            map.on('click', function (e) {
+                if (!map.getCanvas().style.cursor) {
+                    if (lineSource !== null) {
+                        map.removeLayer('lend-line-viz');
+                        map.removeLayer('borrow-line-viz');
+                        map.removeSource('connect-line');
+                        lineSource = null;
+                    }
+                    codeDisplay.textContent = "";
+                    nameDisplay.textContent = "";
+                    cityDisplay.textContent = "";
+                    countryDisplay.textContent = "";
+                    actDisplay.textContent = "";
+                    borrowDisplay.textContent = "";
+                    lendDisplay.textContent = "";
+                }
+            });    
+
+         });
+
+    </script>
+
+</body>
+</html>
